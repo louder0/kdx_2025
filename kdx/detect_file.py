@@ -388,5 +388,3 @@ def find_kdx_by_cc_simple(kdx_lines, gangang_lines, eps_pos=3.0, eps_ang=5.0, ep
     return results
 
 
-
-
