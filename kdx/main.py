@@ -49,7 +49,7 @@ if __name__ == '__main__':
 
 
     for file_idx in range(len(list(Path(pdf_dir).glob("qq*.pdf")))):
-        if not file_idx in [3,4,5,6,7]:    #0,3,5,6,7
+        if not file_idx in [0,1,3,4,5,6,7]:    #0,3,5,6,7
             continue
         pdf_path = f'{pdf_dir}/qq{file_idx}.pdf'
         orig_png_path = f'{orig_png_dir}/qq{file_idx}.png'
@@ -84,7 +84,7 @@ if __name__ == '__main__':
                 #findgg
                 not_kdx, kdx_lines, all_lines = seperate_kdx_and_rest(line_txt_path, kdx_txt_path, lens)
                 gangangs = get_gangangs(not_kdx, kdx_lines, lens=lens)
-                basekdx, exkdx, exggs = draw_and_diff_kdx(gangangs, final_png_path, not_kdx, all_lines)
+                basekdx, exkdx, exggs = draw_and_diff_kdx(gangangs, final_png_path, not_kdx, all_lines, kdx_lines)
                 renew_txt(((restkdx_txt_path,basekdx), (exkdx_txt_path,exkdx), (exggs_txt_path,exggs)))
                 #如果重新运行的话记得改一下get_gangangs把45°也加一个角度限制
 

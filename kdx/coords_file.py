@@ -96,7 +96,7 @@ def is_point_on_line(p1, p2, p, tol=1):
     dist = math.hypot(x3 - foot_x, y3 - foot_y)
     return dist <= tol'''
 
-def find_kdx(lines, circles, kdx_txt_path, tol=4):
+def find_kdx(lines, circles, kdx_txt_path, tol=2):
     kdx_lines = []
     for line in lines:
         x0,y0,x1,y1 = line

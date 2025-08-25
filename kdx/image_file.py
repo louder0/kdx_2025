@@ -102,7 +102,7 @@ def draw_lines(lines, draw_png_path):
 
 #------------------------task-2-------------------------
 
-def draw_and_diff_kdx(gangangs, final_png_path, not_kdx, all_lines):
+def draw_and_diff_kdx(gangangs, final_png_path, not_kdx, all_lines, kdx_lines):
     Image.MAX_IMAGE_PIXELS = 2000000000
     with Image.open(final_png_path) as img:
         gangang_rest = {}
@@ -128,7 +128,7 @@ def draw_and_diff_kdx(gangangs, final_png_path, not_kdx, all_lines):
                 for x0,y0,x1,y1 in gg45:
                     gg_c+=1
                     draw.line([x0,y0,x1,y1],fill='brown',width=2)
-            else:
+            elif kdx in kdx_lines:
                 gangang_rest[kdx]=gg
 
         possible_exggs = [i 
@@ -152,15 +152,20 @@ def draw_exkdx_n_exggs(gangangs, png_path):
     with Image.open(png_path) as img:
         draw = ImageDraw.Draw(img)
         cc_c, gg_c = 0, 0
+        max_kdx = (0,(),())
 
         for kdx, gg in gangangs.items():
+            if len(kdx) > max_kdx[0]:
+                max_kdx = (len(kdx), kdx, gg)
             for kx0,ky0,kx1,ky1 in kdx:
                 cc_c += 1
-                draw.line([kx0,ky0,kx1,ky1],fill='orange',width=3)
+                draw.line([kx0,ky0,kx1,ky1],fill=(rint(255, 200),rint(135,170),rint(0,50)),width=3)
 
             for x0,y0,x1,y1 in gg:
                 gg_c+=1
                 draw.line([x0,y0,x1,y1],fill='green',width=3)
+        print(max_kdx[1]);print();print();print();
+        print(max_kdx[2])
 
         img.save(png_path)
     print(f'[{str(os.path.basename(png_path)).upper()}]: drew {cc_c} ccs and {gg_c} ggs')

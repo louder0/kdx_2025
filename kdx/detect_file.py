@@ -167,7 +167,7 @@ def get_gangangs(not_kdx, kdx_lines, lens=((33,25,25), 55), tol=1):
             if is90d:
                 if not max_len > line_len > min_len[2]:
                     continue
-                if not is_point_on_line(p1,p2,((gx1+gx0)/2,(gy1+gy0)/2),tol=3):   #tol为3的时候qq7的fp好像是没有||||||||||||||||||||||||||||
+                if not is_point_on_line(p1,p2,((gx1+gx0)/2,(gy1+gy0)/2),tol=3):
                     continue
                 if not line_len > min_len[0]:
                     continue
@@ -175,6 +175,8 @@ def get_gangangs(not_kdx, kdx_lines, lens=((33,25,25), 55), tol=1):
 
             elif is45d:
                 if not max_len > line_len > min_len[1]:
+                    continue
+                if not is_point_on_line(p1,p2,((gx1+gx0)/2,(gy1+gy0)/2),tol=3):
                     continue
                 kdx_gg45.append((gx0,gy0,gx1,gy1))
 
@@ -229,125 +231,53 @@ def get_rexgangangs(restkdx_path, exggs_path, exkdx_path):
     return basekdx_dict, not_kdx, kdx_lines
 
 if True:
-    def _build_graph_kdx(kdx_lines, eps_pos=3.0, eps_ang=5.0, eps_line=2.0, eps_olap=3.0):
-        """
-        加速策略：
-        1) 端点重合：用网格哈希，只在同格/邻格比较
-        2) 共线重叠：角度分桶 + 法向距离分桶，在桶内做投影区间扫描
-        返回：邻接表 adj（与旧版一致）
-        """
+    def _build_graph_kdx(kdx_lines, eps_pos=3.0, eps_ang=2, eps_line=2.0, eps_olap=3.0):
+        _pt = lambda seg,i: (seg[0],seg[1]) if i==0 else (seg[2],seg[3])
+        _dist = lambda a,b: math.hypot(a[0]-b[0], a[1]-b[1])
+
+        def _colinear_overlap(s1,s2,eps_ang,eps_line,eps_olap):
+            def _proj_interval(seg, axis):
+                p0 = (seg[0],seg[1]); p1 = (seg[2],seg[3])
+                s0 = p0[0]*axis[0] + p0[1]*axis[1]
+                s1 = p1[0]*axis[0] + p1[1]*axis[1]
+                return (s0,s1) if s0 <= s1 else (s1,s0)
+            
+            def _dist_point_to_line(pt, seg):
+                x0,y0,x1,y1 = seg
+                px,py = pt
+                vx,vy = x1-x0, y1-y0
+                wx,wy = px-x0, py-y0
+                v2 = vx*vx + vy*vy
+                if v2 == 0.0:
+                    return math.hypot(px-x0, py-y0)
+                return abs(wx*vy - wy*vx) / math.sqrt(v2)
+
+            def _ang(seg):
+                x0,y0,x1,y1 = seg
+                return math.degrees(math.atan2(y1-y0, x1-x0)) % 180.0
+
+            a1 = _ang(s1); a2 = _ang(s2)
+            d = abs(a1-a2) % 180.0
+            if (180.0 - d if d > 90.0 else d) > eps_ang: 
+                return False
+            if _dist_point_to_line((s1[0],s1[1]),s2) > eps_line: return False
+            if _dist_point_to_line((s1[2],s1[3]),s2) > eps_line: return False
+            if _dist_point_to_line((s2[0],s2[1]), s1) > eps_line: return False
+            if _dist_point_to_line((s2[2],s2[3]), s1) > eps_line: return False
+            ax = (math.cos(math.radians((a1+a2)/2.0)), math.sin(math.radians((a1+a2)/2.0)))
+            s0,s1v = _proj_interval(s1, ax)
+            t0,t1v = _proj_interval(s2, ax)
+            return (min(s1v,t1v) - max(s0,t0)) >= eps_olap
+
         n = len(kdx_lines)
-        if n == 0:
-            return []
-
-        # ---------- 预处理 ----------
-        # 端点、方向角（0..180）、包围盒
-        p0 = [(x0, y0) for (x0, y0, _,  _) in kdx_lines]
-        p1 = [(x1, y1) for ( _,  _, x1, y1) in kdx_lines]
-        ang = []
-        bbox = []
-        for (x0,y0,x1,y1) in kdx_lines:
-            a = math.degrees(math.atan2(y1-y0, x1-x0)) % 180.0
-            ang.append(a)
-            xmin, xmax = (x0, x1) if x0 <= x1 else (x1, x0)
-            ymin, ymax = (y0, y1) if y0 <= y1 else (y1, y0)
-            # 略微外扩，避免边界抖动
-            bbox.append((xmin-1e-6, ymin-1e-6, xmax+1e-6, ymax+1e-6))
-
-        adj_sets = [set() for _ in range(n)]
-        add_edge = lambda i, j: (adj_sets[i].add(j), adj_sets[j].add(i)) if i != j else None
-
-        # ---------- 1) 端点重合：网格哈希 ----------
-        cell = max(eps_pos, 1.0)
-        to_cell = lambda x, y: (int(math.floor(x / cell)), int(math.floor(y / cell)))
-
-        grid = defaultdict(list)  # (cx,cy) -> [(idx, which_endpoint)]
+        adj = [[] for _ in range(n)]
         for i in range(n):
-            cx0, cy0 = to_cell(*p0[i])
-            cx1, cy1 = to_cell(*p1[i])
-            grid[(cx0, cy0)].append((i, 0))
-            grid[(cx1, cy1)].append((i, 1))
-
-        neighbors9 = [(dx,dy) for dx in (-1,0,1) for dy in (-1,0,1)]
-
-        for (cx, cy), items in grid.items():
-            # 取 3x3 邻域
-            bucket = []
-            for dx, dy in neighbors9:
-                bucket.extend(grid.get((cx+dx, cy+dy), []))
-            # 只在桶内做距离检查
-            for a in range(len(items)):
-                ia, wa = items[a]
-                pa = p0[ia] if wa == 0 else p1[ia]
-                for ib, wb in bucket:
-                    if ib <= ia:  # 去重
-                        continue
-                    pb = p0[ib] if wb == 0 else p1[ib]
-                    if math.hypot(pa[0]-pb[0], pa[1]-pb[1]) <= eps_pos:
-                        add_edge(ia, ib)
-
-        # ---------- 2) 共线重叠：角度/法向分桶 + 区间扫描 ----------
-        bin_w = max(eps_ang, 1e-6)             # 角度桶宽
-        to_bin = lambda a: int((a + 0.5*bin_w) // bin_w)  # 近似 round(a/bin_w)
-        # 让 180° 回归 0°
-        norm_bin = lambda b: 0 if (b * bin_w) >= 180.0 - 1e-9 else b
-
-        # 行：角度桶（含左右邻桶），列：法向距离桶
-        stripes = defaultdict(list)  # key=(b_angle, b_c) -> list of (s0, s1, idx)
-
-        for i in range(n):
-            b = norm_bin(to_bin(ang[i]))
-            # 为覆盖“跨桶但角度差<=eps_ang”，把每条线同时放入 b-1, b, b+1 三个桶
-            for bb in (b-1, b, b+1):
-                bnorm = norm_bin(bb)
-                theta = bnorm * bin_w  # 桶中心角
-                u = (math.cos(math.radians(theta)), math.sin(math.radians(theta)))    # 主方向
-                nvec = (-u[1], u[0])  # 法向
-                # 法向距离 c，用端点之一即可
-                c = nvec[0]*p0[i][0] + nvec[1]*p0[i][1]
-                cbin = int(round(c / max(eps_line, 1e-6)))
-
-                # 投影区间（在轴 u 上）
-                s00 = u[0]*p0[i][0] + u[1]*p0[i][1]
-                s01 = u[0]*p1[i][0] + u[1]*p1[i][1]
-                s0, s1 = (s00, s01) if s00 <= s01 else (s01, s00)
-
-                stripes[(bnorm, cbin)].append((s0, s1, i, u, nvec))
-
-        # 在每个条带内做“按起点排序”的区间扫描，找重叠对
-        for key, items in stripes.items():
-            if len(items) <= 1:
-                continue
-            # 先按 s0 排序
-            items.sort(key=lambda t: t[0])
-            active = []  # 存 (s1, idx)
-            j0 = 0
-            for s0, s1, i, u, nvec in items:
-                # 清理已不可能重叠的
-                k = 0
-                while k < len(active) and active[k][0] < s0 - eps_olap:
-                    k += 1
-                if k > 0:
-                    active = active[k:]
-
-                # 与当前 active 内所有区间重叠的加边
-                for s1_prev, j in active:
-                    # AABB 粗筛（可省，但几乎不要成本）
-                    xmin_i, ymin_i, xmax_i, ymax_i = bbox[i]
-                    xmin_j, ymin_j, xmax_j, ymax_j = bbox[j]
-                    if xmax_i < xmin_j or xmax_j < xmin_i or ymax_i < ymin_j or ymax_j < ymin_i:
-                        continue
-                    # 区间重叠阈值
-                    if min(s1, s1_prev) - s0 >= eps_olap:
-                        add_edge(i, j)
-
-                # 把自己放进 active（保持按 s1 非降序插入）
-                # 简单起见：append 再按 s1 排一下；数量通常不大
-                active.append((s1, i))
-                active.sort(key=lambda t: t[0])
-
-        # ---------- 输出邻接表（与旧版一致） ----------
-        adj = [list(neis) for neis in adj_sets]
+            for j in range(i+1, n):
+                s1, s2 = kdx_lines[i], kdx_lines[j]
+                did_endpoint_touch = any(_dist(_pt(s1,i), _pt(s2,j)) <= eps_pos for i in (0,1) for j in (0,1))
+                if did_endpoint_touch or _colinear_overlap(s1,s2,eps_ang,eps_line,eps_olap):
+                    adj[i].append(j)
+                    adj[j].append(i)
         return adj
 
     def _connected_components(adj, kdx_lines):
@@ -355,21 +285,31 @@ if True:
         vis = [False]*n
         comps = []
         for i in range(n):
-            if vis[i]: 
+            if vis[i]:
                 continue
             q = deque([i]); vis[i] = True
             comp = []
+            edges = 0
             while q:
                 u = q.popleft()
                 comp.append(u)
                 for v in adj[u]:
+                    edges += 1
                     if not vis[v]:
                         vis[v] = True
                         q.append(v)
-            comps.append(comp)
-        return [[kdx_lines[i] for i in comp] for comp in comps]
+            edges //= 2  # 无向图边数
+            # 无环连通图必须满足 E = V - 1
+            if len(comp) > 1 and edges == len(comp) - 1:
+                comps.append([kdx_lines[i] for i in comp])
+        return comps
 
 def find_kdx_by_cc_simple(kdx_lines, gangang_lines, eps_pos=3.0, eps_ang=5.0, eps_line=2.0, eps_olap=3.0):
+    L2_MIN = 625  #25*25
+    kdx_lines = [seg for seg in kdx_lines
+                     if (seg[2]-seg[0])*(seg[2]-seg[0]) + 
+                        (seg[3]-seg[1])*(seg[3]-seg[1]) >= L2_MIN]
+
     adj = _build_graph_kdx(kdx_lines, eps_pos, eps_ang, eps_line, eps_olap)
     comps = _connected_components(adj, kdx_lines)
 
@@ -378,12 +318,12 @@ def find_kdx_by_cc_simple(kdx_lines, gangang_lines, eps_pos=3.0, eps_ang=5.0, ep
         gangangs_dict = get_gangangs(gangang_lines, comp)
         gangangs = set()
         for gg90, gg45 in gangangs_dict.values():
-            for g in gg90: 
-                gangangs.add(g)
-            for g in gg45: 
-                gangangs.add(g)
+            if len(gg90)>1 or len(gg45)>1:
+                continue
+            for g in gg90: gangangs.add(g)
+            for g in gg45: gangangs.add(g)
 
-        if 2 <= len(gangangs) <= 6:
+        if len(gangangs)>=2:
             results[tuple(comp)]=tuple(gangangs)
     return results
 
