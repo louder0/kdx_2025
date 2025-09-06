@@ -8,99 +8,108 @@ from image_file import *
 from detect_file import *
 
 
+if __name__ == "__main__":
+    pdf_dir = "/root/autodl-tmp/hansen/kdx/pdfsorces"
+    orig_png_dir = "/root/autodl-tmp/hansen/kdx/pngsorces"
+    draw_png_dir = "/root/autodl-tmp/hansen/kdx/draw_png"
+    final_png_dir = "/root/autodl-tmp/hansen/kdx/final_png"
+    final_png2_dir = "/root/autodl-tmp/hansen/kdx/final_png2"
+    qq_txt_dir = "/root/autodl-tmp/hansen/kdx/qq_txt"
+    line_txt_dir = "/root/autodl-tmp/hansen/kdx/line_txt"
+    kdx_txt_dir = "/root/autodl-tmp/hansen/kdx/kdx_txt"
+    restkdx_txt_dir = "/root/autodl-tmp/hansen/kdx/restkdx_txt"
+    exkdx_txt_dir = "/root/autodl-tmp/hansen/kdx/exkdx_txt"
+    exggs_txt_dir = "/root/autodl-tmp/hansen/kdx/exggs_txt"
+    model = YOLO("/root/autodl-tmp/hansen/kdx/best.pt")
+    features = ["items", "type", "rect", "color", "width", "dashes"]
+    lens = ((33, 25, 25), 55)  # min_len依次是kdx_gg90mid, kdx_gg45和kdx_gg90
 
-if __name__ == '__main__':
-    pdf_dir = '/root/autodl-tmp/hansen/kdx/pdfsorces'
-    orig_png_dir = '/root/autodl-tmp/hansen/kdx/pngsorces'
-    draw_png_dir = '/root/autodl-tmp/hansen/kdx/draw_png'
-    final_png_dir = '/root/autodl-tmp/hansen/kdx/final_png'
-    final_png2_dir = '/root/autodl-tmp/hansen/kdx/final_png2'
-    qq_txt_dir = '/root/autodl-tmp/hansen/kdx/qq_txt'
-    line_txt_dir = '/root/autodl-tmp/hansen/kdx/line_txt'
-    kdx_txt_dir = '/root/autodl-tmp/hansen/kdx/kdx_txt'
-    restkdx_txt_dir = '/root/autodl-tmp/hansen/kdx/restkdx_txt'
-    exkdx_txt_dir = '/root/autodl-tmp/hansen/kdx/exkdx_txt'
-    exggs_txt_dir = '/root/autodl-tmp/hansen/kdx/exggs_txt'
-    model = YOLO('/root/autodl-tmp/hansen/kdx/best.pt')
-    features = ['items', 'type', 'rect', 'color', 'width', 'dashes']
-    lens = ((33,25,25), 55)    #min_len依次是kdx_gg90mid, kdx_gg45和kdx_gg90
-
-    task = float('inf')
-    if True:    #task和文件夹创建
-        if os.path.exists(restkdx_txt_dir):
-            task = 3
-            shutil.copytree(final_png_dir, final_png2_dir)
-        elif os.path.exists(line_txt_dir):    #findgg,find_extend
-            task = 2
-            shutil.copytree(draw_png_dir,final_png_dir)
-            os.makedirs(restkdx_txt_dir)
-            os.makedirs(exkdx_txt_dir)
-            os.makedirs(exggs_txt_dir)
-        elif os.path.exists(qq_txt_dir):
-            task = 1    #drawqq, findkdx
-            os.makedirs(line_txt_dir)
-            os.makedirs(kdx_txt_dir)
-            shutil.copytree(orig_png_dir, draw_png_dir)
-        else:
-            task = 0    #cutpic, findqq
-            os.makedirs(orig_png_dir)
-            os.makedirs(qq_txt_dir)
-
-
+    task = float("inf")
+    if os.path.exists(restkdx_txt_dir):
+        task = 3
+        shutil.copytree(final_png_dir, final_png2_dir)
+    elif os.path.exists(line_txt_dir):  # findgg,find_extend
+        task = 2
+        shutil.copytree(draw_png_dir, final_png_dir)
+        os.makedirs(restkdx_txt_dir)
+        os.makedirs(exkdx_txt_dir)
+        os.makedirs(exggs_txt_dir)
+    elif os.path.exists(qq_txt_dir):
+        task = 1  # drawqq, findkdx
+        os.makedirs(line_txt_dir)
+        os.makedirs(kdx_txt_dir)
+        shutil.copytree(orig_png_dir, draw_png_dir)
+    else:
+        task = 0  # cutpic, findqq
+        os.makedirs(orig_png_dir)
+        os.makedirs(qq_txt_dir)
 
     for file_idx in range(len(list(Path(pdf_dir).glob("qq*.pdf")))):
-        if not file_idx in [0,1,3,4,5,6,7]:    #0,3,5,6,7
+        if not file_idx in [0,1,3,4,5,6,7]:    # 0,1,3,4,5,6,7
             continue
-        pdf_path = f'{pdf_dir}/qq{file_idx}.pdf'
-        orig_png_path = f'{orig_png_dir}/qq{file_idx}.png'
-        draw_png_path = f'{draw_png_dir}/qq{file_idx}.png'
-        final_png_path = f'{final_png_dir}/qq{file_idx}.png'
-        final_png2_path = f'{final_png2_dir}/qq{file_idx}.png'
-        qq_txt_path = f'{qq_txt_dir}/qq{file_idx}.txt'
-        line_txt_path = f'{line_txt_dir}/qq{file_idx}.txt'
-        kdx_txt_path = f'{kdx_txt_dir}/qq{file_idx}.txt'
-        restkdx_txt_path = f'{restkdx_txt_dir}/qq{file_idx}.txt'
-        exkdx_txt_path = f'{exkdx_txt_dir}/qq{file_idx}.txt'
-        exggs_txt_path = f'{exggs_txt_dir}/qq{file_idx}.txt'
+        pdf_path = f"{pdf_dir}/qq{file_idx}.pdf"
+        orig_png_path = f"{orig_png_dir}/qq{file_idx}.png"
+        draw_png_path = f"{draw_png_dir}/qq{file_idx}.png"
+        final_png_path = f"{final_png_dir}/qq{file_idx}.png"
+        final_png2_path = f"{final_png2_dir}/qq{file_idx}.png"
+        qq_txt_path = f"{qq_txt_dir}/qq{file_idx}.txt"
+        line_txt_path = f"{line_txt_dir}/qq{file_idx}.txt"
+        kdx_txt_path = f"{kdx_txt_dir}/qq{file_idx}.txt"
+        restkdx_txt_path = f"{restkdx_txt_dir}/qq{file_idx}.txt"
+        exkdx_txt_path = f"{exkdx_txt_dir}/qq{file_idx}.txt"
+        exggs_txt_path = f"{exggs_txt_dir}/qq{file_idx}.txt"
 
-        if True:    #根据task调用函数
-            if task == 0:
-                #cutpic
-                pil_png = get_png_image(pdf_path,orig_png_path)
-                cut_imgs = cut_png(pil_png)
-                #findqq
-                circles = predict_qq_with_yolo(cut_imgs, model, qq_txt_path)
+        if task == 0:
+            # cutpic
+            pil_png = get_png_image(pdf_path, orig_png_path)
+            cut_imgs = cut_png(pil_png)
+            # findqq
+            circles = predict_qq_with_yolo(cut_imgs, model, qq_txt_path)
 
-            elif task == 1:
-                #drawqq
-                circles = get_qq(qq_txt_path)
-                draw_qq_in_png(circles, draw_png_path)
-                #findkdx
-                lines = get_lines(pdf_path, features, line_txt_path)
-                kdx_lines = find_kdx(lines, circles, kdx_txt_path)
-                draw_lines(lines, draw_png_path)
+        elif task == 1:
+            # drawqq
+            circles = get_qq(qq_txt_path)
+            draw_qq_in_png(circles, draw_png_path)
+            # findkdx
+            lines = get_lines(pdf_path, features, line_txt_path)
+            kdx_lines = find_kdx(lines, circles, kdx_txt_path)
+            draw_lines(lines, draw_png_path)
 
-            elif task == 2:
-                #findgg
-                not_kdx, kdx_lines, all_lines = seperate_kdx_and_rest(line_txt_path, kdx_txt_path, lens)
-                gangangs = get_gangangs(not_kdx, kdx_lines, lens=lens)
-                basekdx, exkdx, exggs = draw_and_diff_kdx(gangangs, final_png_path, not_kdx, all_lines, kdx_lines)
-                renew_txt(((restkdx_txt_path,basekdx), (exkdx_txt_path,exkdx), (exggs_txt_path,exggs)))
-                #如果重新运行的话记得改一下get_gangangs把45°也加一个角度限制
+        elif task == 2:
+            # findgg
+            not_kdx, kdx_lines, all_lines = seperate_kdx_and_rest(
+                line_txt_path, kdx_txt_path, lens
+            )
+            gangangs = get_gangangs(not_kdx, kdx_lines, lens=lens)
+            basekdx, exkdx, exggs = draw_and_diff_kdx(
+                gangangs, final_png_path, not_kdx, all_lines, kdx_lines
+            )
+            renew_txt(
+                (
+                    (restkdx_txt_path, basekdx),
+                    (exkdx_txt_path, exkdx),
+                    (exggs_txt_path, exggs),
+                )
+            )
+            # 如果重新运行的话记得改一下get_gangangs把45°也加一个角度限制
 
-            elif task == 3:
-                basekdx_dict, not_kdx, kdx_lines = get_rexgangangs(restkdx_txt_path, exggs_txt_path, exkdx_txt_path)
-                gangangs = find_kdx_by_cc_simple(kdx_lines, not_kdx)
-                draw_exkdx_n_exggs(gangangs, final_png2_path)
+        elif task == 3:
+            basekdx, not_kdx, kdx_lines = get_exlines_from_txt(
+                restkdx_txt_path, exggs_txt_path, exkdx_txt_path
+            )
+            gangangs = find_kdx_by_cc(
+                basekdx, kdx_lines, not_kdx, eps=(0.05, 0.05, 0.05, 0.05)
+            )
+            draw_exkdx_n_exggs(gangangs, final_png2_path)
 
-            else:
-                print('Traceback (most recent call last):\n     File "/root/autodl-tmp/envs/ouhang/lib/python3.10/site-packages/PIL/ImageFile.py", line 249, in _save\n        you_got_tricked = "lol"\nWellItsAnError: your fault')
-                break
+        else:
+            print(
+                'Traceback (most recent call last):\n     File "/root/autodl-tmp/envs/ouhang/lib/python3.10/site-packages/PIL/ImageFile.py", line 249, in _save\n        you_got_tricked = "lol"\nWellItsAnError: your fault'
+            )
+            break
 
 
-
-
-'''    #规划
+"""    #规划
 crop_size = 352
 stride = 128
 
@@ -116,9 +125,9 @@ stride = 128
 			这个东西可以是线也可以是X样式的两条线
 	并标出
 这种线也就是跨度线
-'''
+"""
 
-'''    #反正是yolo的一个什么东西
+"""    #反正是yolo的一个什么东西
 result:
 
 ultralytics.engine.results.Boxes object with attributes:
@@ -137,9 +146,9 @@ xyxyn: tensor([[0.7181, 0.2712, 0.7696, 0.3224]], device='cuda:0')
 
 0: 352x352 1 quanquan, 4.5ms
 Speed: 0.4ms preprocess, 4.5ms inference, 0.7ms postprocess per image at shape (1, 3, 352, 352)
-'''
+"""
 
-'''    #pdf遍历的时候的dict结构
+"""    #pdf遍历的时候的dict结构
 {'items': 
     [('l', Point(1061.0399169921875, 508.47998046875), Point(1060.919921875, 508.3599853515625)), 
     ('l', Point(1060.919921875, 508.3599853515625), Point(1060.7999267578125, 508.239990234375)), 
@@ -165,9 +174,9 @@ Speed: 0.4ms preprocess, 4.5ms inference, 0.7ms postprocess per image at shape (
 'lineJoin': 0.11999999731779099, 
 'dashes': '[] 0'
 }
-'''
+"""
 
-'''    #更全的features
+"""    #更全的features
 features = [
     'items',
     'closePath',
@@ -185,7 +194,7 @@ features = [
     'lineJoin',
     'dashes'
 ]
-'''
+"""
 
 """    #老的找杠杠 更新跨度线的代码和配套的画跨度线的代码
     for gx0,gy0,gx1,gy1 in not_kdx:
@@ -240,7 +249,7 @@ def draw_kdx(kdx, final_png_path):
         img.save(final_png_path)
 """
 
-'''    #老的_build_graph_kdx 更简单但更慢（没觉得慢多少）
+"""    #老的_build_graph_kdx 更简单但更慢（没觉得慢多少）
     def _endpoint_coincide(s1,s2,eps_pos):
         _pt = lambda seg,i: (seg[0],seg[1]) if i==0 else (seg[2],seg[3])
         _dist = lambda a,b: math.hypot(a[0]-b[0], a[1]-b[1])
@@ -294,6 +303,4 @@ def draw_kdx(kdx, final_png_path):
                     adj[i].append(j)
                     adj[j].append(i)
         return adj
-'''
-
-
+"""
