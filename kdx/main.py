@@ -45,7 +45,7 @@ if __name__ == "__main__":
         os.makedirs(qq_txt_dir)
 
     for file_idx in range(len(list(Path(pdf_dir).glob("qq*.pdf")))):
-        if not file_idx in [0,1,3,4,5,6,7]:    # 0,1,3,4,5,6,7
+        if not file_idx in [0,3,5,7]:  # 0,1,3,4,5,6,7
             continue
         pdf_path = f"{pdf_dir}/qq{file_idx}.pdf"
         orig_png_path = f"{orig_png_dir}/qq{file_idx}.png"

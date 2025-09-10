@@ -229,57 +229,110 @@ def get_exlines_from_txt(restkdx_path, exggs_path, exkdx_path):
 
     return basekdx, not_kdx, kdx_lines
 
-from collections import deque
+'''
+def _prune_cycles(adj):
+    """
+    去环策略：只移除造成环的无向边（non-tree edges），保留所有节点。
+    做法：
+      1) 邻接表规范化：去重/去自环/修复对称性（robust，避免假环）。
+      2) 对每个连通分量做 DFS 建生成树（spanning tree）。
+      3) 遇到已访问且非父边的 (u,v) 记为“非树边”，最后从两侧邻接表移除。
+    原地修改 adj 并返回。
+    """
+    m = len(adj)
+
+    # --- (1) 邻接表规范化（important，避免重复边/自环引起的误报） ---
+    for u in range(m):
+        # 去重、去自环
+        adj[u] = sorted({v for v in adj[u] if v != u})
+    # 修复无向对称
+    for u in range(m):
+        for v in adj[u]:
+            if u not in adj[v]:
+                adj[v].append(u)
+    for u in range(m):
+        adj[u].sort()
+
+    visited  = [False] * m
+    parent   = [-1]    * m
+    to_remove = set()   # 记录需要移除的无向边(小,大)
+
+    # --- (2) DFS 构造生成树，并标记“非树边” ---
+    for s in range(m):
+        if visited[s]:
+            continue
+        stack = [s]
+        visited[s] = True
+        parent[s] = -1
+
+        while stack:
+            u = stack.pop()
+            for v in adj[u]:
+                if v == parent[u]:
+                    continue
+                if not visited[v]:
+                    visited[v] = True
+                    parent[v] = u
+                    stack.append(v)
+                else:
+                    # 已访问且不是父边 => 非树边（形成环）
+                    a, b = (u, v) if u < v else (v, u)
+                    to_remove.add((a, b))
+
+    # --- (3) 从两侧邻接表移除这些造成环的边 ---
+    if to_remove:
+        for (u, v) in to_remove:
+            if v in adj[u]:
+                adj[u].remove(v)
+            if u in adj[v]:
+                adj[v].remove(u)
+
+    return adj
+'''
 
 def _prune_cycles(adj):
     """
-    去闭环（按点删除）：找到所有参与闭环的节点，并将这些节点及其边从图中移除。
-    - 若某 CC 含环，则参与环的线(节点)会被移除；
-    - 移除后该 CC 可能被拆成多个 CC（由后续 connected_components 自然产出）；
-    - 若移除后剩余仍连通，则保留剩余那部分。
-    复杂度：O(N+E)
+    一票否决版：只要图中存在至少一个环，就把该图中所有节点的邻接清空（等价于整块剔除）。
+    用在 _connected_components 提供的 CC 子图上。
     """
-    n = len(adj)
-    deg = [len(nei) for nei in adj]
-    removed = [False] * n
+    m = len(adj)
 
-    # 1) 先剥掉所有“非环”的叶子（度<=1），剩下未剥掉的就是环上的节点
-    q = deque([i for i in range(n) if deg[i] <= 1])
-    while q:
-        u = q.popleft()
-        if removed[u]:
-            continue
-        removed[u] = True
-        for v in adj[u]:
-            if removed[v]:
-                continue
-            deg[v] -= 1
-            if deg[v] == 1:
-                q.append(v)
-
-    # 现在 removed[i] == False 的点即为“在某个环上的点”
-    cycle_nodes = [i for i in range(n) if not removed[i]]
-    if not cycle_nodes:
-        return adj  # 没有环，直接返回
-
-    # 2) 把所有环上的节点整体从图里移除（节点 + 所有关联边）
-    cycle_set = set(cycle_nodes)
-
-    # 先从邻居列表里删除这些点
-    for u in range(n):
-        if u in cycle_set:
-            continue
+    # 可选的轻量规范化，避免重复边/自环引起的误判（不改也能用）
+    for u in range(m):
         if adj[u]:
-            # 过滤掉指向环节点的边
-            adj[u] = [v for v in adj[u] if v not in cycle_set]
+            adj[u] = list({v for v in adj[u] if v != u})
 
-    # 再清空环节点自身的邻接表
-    for u in cycle_nodes:
-        adj[u].clear()
+    visited = [False] * m
+
+    def dfs(u: int, p: int) -> bool:
+        visited[u] = True
+        for v in adj[u]:
+            if v == p:
+                continue
+            if not visited[v]:
+                if dfs(v, u):
+                    return True
+            else:
+                # 在无向图中遇到已访问且不是父亲 => 有环
+                return True
+        return False
+
+    # 检测是否存在任意环
+    has_cycle = False
+    for s in range(m):
+        if not visited[s] and adj[s]:
+            if dfs(s, -1):
+                has_cycle = True
+                break
+
+    # 一旦发现环：整块清空（“全部去掉”）
+    if has_cycle:
+        for u in range(m):
+            adj[u].clear()
 
     return adj
 
-#eps_pos决定端点是否项链/eps_ang决定线段方向是否一致/eps_line决定重合精度/eps_olap决定线段最小重叠限制
+# eps_pos决定端点是否相连/eps_ang决定线段方向是否一致/eps_line决定重合精度/eps_olap决定线段最小重叠限制
 def _build_graph_kdx(kdx_lines, eps_pos=1, eps_ang=1, eps_line=1, eps_olap=1):
     _pt = lambda seg, i: (seg[0], seg[1]) if i == 0 else (seg[2], seg[3])
     _dist = lambda a, b: math.hypot(a[0] - b[0], a[1] - b[1])
@@ -340,40 +393,83 @@ def _build_graph_kdx(kdx_lines, eps_pos=1, eps_ang=1, eps_line=1, eps_olap=1):
             ):
                 adj[i].append(j)
                 adj[j].append(i)
-    _prune_cycles(adj)
     return adj
 
 
 def _connected_components(adj, kdx_lines, basekdx):
+    """
+    先对每个原始 CC 做“去闭环”，再在去环后的子图上按 CC 拆分并检查 basekdx。
+    返回每个 CC 对应的线段列表（去环后，且含 base，且大小>1）。
+    """
     n = len(adj)
     vis = [False] * n
     comps = []
+    base_set = set(map(tuple, basekdx))
 
     for i in range(n):
         if vis[i]:
             continue
+
+        # ① 在原图上取出一个 CC 的所有“原索引”
         q = deque([i])
         vis[i] = True
-        has_base = False
-        comp = []
+        comp_nodes = []
         while q:
             u = q.popleft()
-            comp.append(u)
-
-            if tuple(kdx_lines[u]) in basekdx:
-                has_base = True
-
+            comp_nodes.append(u)
             for v in adj[u]:
                 if not vis[v]:
                     vis[v] = True
                     q.append(v)
-        else:  # 确保有至少一条线在basekdx里
-            if len(comp) > 1 and has_base:
-                comps.append([kdx_lines[i] for i in comp])
+        if len(comp_nodes) <= 1:
+            continue
+
+        # ② 构建该 CC 的“诱导子图”（重新编号 0..m-1）
+        idx_map = {orig_idx: new_idx for new_idx, orig_idx in enumerate(comp_nodes)}
+        m = len(comp_nodes)
+        sub_adj = [[] for _ in range(m)]
+        for orig_u in comp_nodes:
+            u = idx_map[orig_u]
+            for orig_v in adj[orig_u]:
+                if orig_v in idx_map:
+                    v = idx_map[orig_v]
+                    sub_adj[u].append(v)
+
+        # ③ 在该子图上“去闭环”（剥掉环上的节点）
+        _prune_cycles(sub_adj)
+
+        # ④ 在“去环后的子图”上再求 CC，并检查 basekdx
+        sub_vis = [False] * m
+        for s in range(m):
+            if (sub_vis[s] or not sub_adj[s]):  # 被清空或孤点将被处理，但我们最后需要 size>1
+                continue
+            q = deque([s])
+            sub_vis[s] = True
+            sub_comp = []
+            has_base = False
+
+            while q:
+                u = q.popleft()
+                sub_comp.append(u)
+
+                # 映射回原索引拿线段，再检查是否在 basekdx
+                orig_u = comp_nodes[u]
+                if tuple(kdx_lines[orig_u]) in base_set:
+                    has_base = True
+
+                for v in sub_adj[u]:
+                    if not sub_vis[v]:
+                        sub_vis[v] = True
+                        q.append(v)
+
+            # ⑤ 只收“去环后 size>1 且含 base”的子分量
+            if len(sub_comp) > 1 and has_base:
+                comps.append([kdx_lines[comp_nodes[u]] for u in sub_comp])
+
     return comps
 
 
-def find_kdx_by_cc(basekdx, kdx_lines, gangang_lines, eps=(1,1,1,1)):
+def find_kdx_by_cc(basekdx, kdx_lines, gangang_lines, eps=(1, 1, 1, 1)):
     eps_pos, eps_ang, eps_line, eps_olap = eps
     L2_MIN = 25
     kdx_lines = [
@@ -388,7 +484,7 @@ def find_kdx_by_cc(basekdx, kdx_lines, gangang_lines, eps=(1,1,1,1)):
 
     results = {}
     for comp in comps:
-        gangangs_dict = get_gangangs(gangang_lines, comp)
+        gangangs_dict = get_gangangs(gangang_lines, comp, tol=2.2)
         gangangs = set()
         for gg90, gg45 in gangangs_dict.values():
             if len(gg90) > 1 or len(gg45) > 1:
